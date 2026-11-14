@@ -1,0 +1,121 @@
+#!/bin/sh
+# goon - the Goon OS Core system tool
+M='\033[1;35m' C='\033[1;36m' B='\033[1m' Y='\033[1;33m' G='\033[1;32m' R='\033[0m'
+say()  { printf "$M==>$R $B%s$R\n" "$*"; }
+die()  { printf "\033[1;31mgoon:\033[0m %s\n" "$*" >&2; exit 1; }
+need_root() { [ "$(id -u)" -eq 0 ] || die "this needs root - run: su -c 'goon $*'"; }
+
+cmd_help() {
+	printf "\n  ${M}goon${R} - Goon OS Core system tool\n\n"
+	printf "  ${C}%-24s${R}%s\n" \
+		"goon info"              "system overview (same as goonfetch)" \
+		"goon net"               "network address, gateway and DNS" \
+		"goon net up"            "ask for a new DHCP address (root)" \
+		"goon disks"             "list disks and partitions" \
+		"goon persist"           "do my files survive a reboot?" \
+		"goon persist setup DEV" "keep files on a partition (ERASES it)" \
+		"goon serve [DIR] [PORT]" "share a folder over HTTP" \
+		"goon editions"          "the three editions of Goon OS" \
+		"goon version"           "version numbers"
+	printf "\n  Built in: ${B}vi top ps free df wget ping ip tar grep sed awk${R}\n"
+	printf "  More: ${B}busybox --list${R}   Logs: ${B}logread${R}   Power: ${B}poweroff${R}, ${B}reboot${R}\n\n"
+}
+
+cmd_version() {
+	. /etc/os-release
+	printf "%s\nLinux %s\n%s\n" "$PRETTY_NAME" "$(uname -r)" "$(busybox 2>&1 | head -n1 | cut -d' ' -f1-2)"
+}
+
+cmd_net() {
+	if [ "${1:-}" = up ]; then
+		need_root net up
+		for path in /sys/class/net/*; do
+			ifc="${path##*/}"; [ "$(cat "$path/type")" = 1 ] || continue
+			[ -f "/run/udhcpc.$ifc.pid" ] && kill "$(cat "/run/udhcpc.$ifc.pid")" 2>/dev/null
+			ip link set "$ifc" up
+			say "Requesting address on $ifc"
+			udhcpc -i "$ifc" -b -t 4 -T 2 -S -p "/run/udhcpc.$ifc.pid" -s /usr/share/udhcpc/default.script
+		done
+		return
+	fi
+	printf "\n  ${B}Interfaces${R}\n"
+	ip -4 -o addr show | awk '{printf "    %-8s %s\n", $2, $4}'
+	printf "  ${B}Gateway${R}\n    %s\n" "$(ip route | awk '/^default/ {print $3 " via " $5; exit}')"
+	printf "  ${B}DNS${R}\n"; awk '/^nameserver/ {print "    " $2}' /etc/resolv.conf 2>/dev/null
+	printf '\n'
+}
+
+cmd_disks() {
+	printf "\n  ${B}%-10s %9s  %-8s %-12s %s${R}\n" DEVICE SIZE TYPE LABEL MODEL
+	for d in /sys/block/*; do
+		n="${d##*/}"
+		case "$n" in loop*|ram*|zram*) continue ;; esac
+		size=$(( $(cat "$d/size") * 512 / 1000000000 ))
+		model=$(cat "$d/device/model" 2>/dev/null | sed 's/ *$//')
+		printf "  %-10s %7sGB  %-8s %-12s %s\n" "/dev/$n" "$size" disk "" "$model"
+		for p in "$d"/"$n"*; do
+			[ -d "$p" ] || continue
+			pn="${p##*/}"
+			psize=$(( $(cat "$p/size") * 512 / 1000000000 ))
+			info=$(blkid "/dev/$pn" 2>/dev/null)
+			label=$(echo "$info" | sed -n 's/.*LABEL="\([^"]*\)".*/\1/p')
+			fstype=$(echo "$info" | sed -n 's/.*TYPE="\([^"]*\)".*/\1/p')
+			printf "   +- %-8s %7sGB  %-8s %-12s\n" "/dev/$pn" "$psize" "${fstype:--}" "$label"
+		done
+	done
+	printf '\n'
+}
+
+cmd_persist() {
+	case "${1:-status}" in
+	status)
+		if grep -q ' /mnt/goon-data ' /proc/mounts; then
+			dev=$(awk '$2=="/mnt/goon-data"{print $1}' /proc/mounts)
+			printf "${G}Persistent${R}: /home and /root are stored on %s\n" "$dev"
+		else
+			printf "${Y}Live mode${R}: everything is in RAM and is lost at power-off.\n"
+			printf "To keep your files, give Goon a partition:  goon persist setup /dev/sdXN\n"
+			printf "(find it with: goon disks)\n"
+		fi ;;
+	setup)
+		need_root persist setup
+		dev="${2:-}"
+		[ -b "$dev" ] || die "usage: goon persist setup /dev/sdXN   (a partition, not a whole disk)"
+		grep -q "^$dev " /proc/mounts && die "$dev is mounted - unmount it first"
+		printf "${Y}This ERASES everything on %s.${R} Type YES to continue: " "$dev"
+		read -r answer; [ "$answer" = YES ] || die "cancelled"
+		say "Formatting $dev as GOON_DATA"
+		mkfs.ext2 -q -L GOON_DATA "$dev" || die "format failed"
+		/sbin/goon-persist-mount || die "could not mount $dev"
+		chown -R goon:goon /home/goon
+		say "Done - /home and /root now live on $dev and survive reboots" ;;
+	*) die "usage: goon persist [status|setup DEV]" ;;
+	esac
+}
+
+cmd_serve() {
+	dir="${1:-.}" port="${2:-8080}"
+	[ -d "$dir" ] || die "no such folder: $dir"
+	ip=$(ip -4 -o addr show scope global | awk '{split($4,a,"/"); print a[1]; exit}')
+	say "Serving $(cd "$dir" && pwd) at http://${ip:-localhost}:$port/  (Ctrl+C to stop)"
+	exec httpd -f -v -p "$port" -h "$dir"
+}
+
+cmd_editions() {
+	printf "\n  ${M}Goon OS editions${R}\n\n"
+	printf "  ${B}Core${R}     terminal only, runs in RAM, 25 MB ISO ${G}<- you are here${R}\n"
+	printf "  ${B}Lite${R}     small graphical desktop for older PCs (in development)\n"
+	printf "  ${B}Desktop${R}  full Debian-based desktop with apps and installer\n\n"
+}
+
+case "${1:-help}" in
+	help|-h|--help) cmd_help ;;
+	info|fetch)     exec goonfetch ;;
+	net)            shift; cmd_net "$@" ;;
+	disks|disk)     cmd_disks ;;
+	persist)        shift; cmd_persist "$@" ;;
+	serve)          shift; cmd_serve "$@" ;;
+	editions)       cmd_editions ;;
+	version|-v|--version) cmd_version ;;
+	*) die "unknown command '$1' - try: goon help" ;;
+esac

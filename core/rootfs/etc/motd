@@ -1,0 +1,5 @@
+
+  Welcome to [1;35mGoon OS Core @VERSION@[0m - Linux @KERNEL@, BusyBox @BUSYBOX@
+  Everything runs in RAM. Type [1;36mgoon help[0m to see what you can do.
+  Change the default password now with [1;36mpasswd[0m.
+

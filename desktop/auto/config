@@ -1,0 +1,26 @@
+#!/bin/sh
+# Goon OS — live-build configuration.
+# `lb config` runs this file automatically. Edit options here, then rebuild.
+set -e
+
+lb config noauto \
+	--mode debian \
+	--system live \
+	--distribution trixie \
+	--architecture amd64 \
+	--archive-areas "main contrib non-free non-free-firmware" \
+	--binary-images iso-hybrid \
+	--bootappend-live "boot=live components quiet username=goon hostname=goon-os" \
+	--debian-installer live \
+	--debian-installer-gui true \
+	--firmware-binary true \
+	--firmware-chroot true \
+	--security true \
+	--updates true \
+	--apt-recommends true \
+	--memtest none \
+	--image-name goon-os \
+	--iso-application "Goon OS" \
+	--iso-publisher "Goon OS Project" \
+	--iso-volume "GOON_OS" \
+	"${@}"

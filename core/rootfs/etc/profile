@@ -1,0 +1,19 @@
+# Goon OS Core - login shell setup (BusyBox ash)
+export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+export EDITOR=vi PAGER=less
+export HISTFILE="$HOME/.ash_history" HISTSIZE=1000
+umask 022
+
+if [ "$(id -u)" -eq 0 ]; then
+	PS1='\[\033[1;31m\]\u\[\033[0m\]@\[\033[1;35m\]\h\[\033[0m\]:\[\033[1;34m\]\w\[\033[0m\]# '
+else
+	PS1='\[\033[1;36m\]\u\[\033[0m\]@\[\033[1;35m\]\h\[\033[0m\]:\[\033[1;34m\]\w\[\033[0m\]$ '
+fi
+export PS1
+
+alias ls='ls --color=auto'
+alias ll='ls -lh --color=auto'
+alias la='ls -lAh --color=auto'
+alias ..='cd ..'
+alias cls='clear'
+alias fetch='goonfetch'

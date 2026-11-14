@@ -1,0 +1,11 @@
+#!/bin/sh
+# Goon OS Core - runs on poweroff / reboot
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin
+printf '\n  \033[1;35mShutting down Goon OS Core\033[0m\n'
+for pid in /run/udhcpc.*.pid; do [ -f "$pid" ] && kill "$(cat "$pid")" 2>/dev/null; done
+killall klogd syslogd 2>/dev/null
+sync
+for m in /root /home /mnt/goon-data; do
+	grep -q " $m " /proc/mounts && umount "$m" 2>/dev/null
+done
+sync

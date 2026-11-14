@@ -1,0 +1,68 @@
+#!/usr/bin/expect -f
+# Boot the ISO headless, log in over the serial console, check the system works, power off.
+#   ./scripts/smoke-test.exp out/goon-os-core-1.0-x86_64.iso [bios|uefi]
+set iso  [lindex $argv 0]
+set mode [expr {[llength $argv] > 1 ? [lindex $argv 1] : "bios"}]
+set timeout 300
+log_user 1
+
+set qemu [list qemu-system-x86_64 -m 512 -nographic -no-reboot -cdrom $iso -boot d \
+          -netdev user,id=n0 -device e1000,netdev=n0]
+if {[file writable /dev/kvm]} { lappend qemu -enable-kvm -cpu host }
+if {$mode eq "uefi"} {
+    set code /usr/share/OVMF/OVMF_CODE_4M.fd
+    if {![file exists $code]} { set code /usr/share/OVMF/OVMF_CODE.fd }
+    lappend qemu -drive if=pflash,format=raw,readonly=on,file=$code
+}
+
+proc fail {msg} { puts "\n\nSMOKE TEST FAILED ($msg)"; exit 1 }
+proc check {cmd pattern what} {
+    send "$cmd\r"
+    expect {
+        -re $pattern { puts "\n--- ok: $what" }
+        timeout      { fail $what }
+    }
+    expect -re {# $}
+}
+
+spawn {*}$qemu
+expect {
+    "Goon OS Core"  { puts "\n--- ok: GRUB menu" }
+    timeout         { fail "no boot menu" }
+}
+expect {
+    -re {/ _ \\ / _ \\}  { puts "\n--- ok: login banner logo intact" }
+    timeout         { fail "login banner logo mangled" }
+}
+expect {
+    "goon login:"   { puts "\n--- ok: reached login prompt" }
+    "Kernel panic"  { fail "kernel panic" }
+    timeout         { fail "no login prompt" }
+}
+send "root\r"
+expect "Password:"
+send "goon\r"
+expect {
+    -re {# $}       { puts "\n--- ok: root login" }
+    "incorrect"     { fail "login rejected" }
+    timeout         { fail "no shell prompt" }
+}
+
+check "cat /etc/os-release"               {PRETTY_NAME="Goon OS Core}  "os-release"
+check "goon version"                      {Linux [0-9.]+-goon}          "goon version"
+check "goonfetch"                         {Memory}                      "goonfetch"
+check "sleep 3; ip -4 -o addr show eth0"  {10\.0\.2\.15/24}             "DHCP address on eth0"
+check "cat /etc/resolv.conf"              {nameserver 10\.0\.2\.3}      "DNS from DHCP"
+check "su goon -c 'id; touch ~/x && echo HOME_OK'" {uid=1000\(goon\).*HOME_OK} "user account + su"
+check "logread | tail -n 3"               {.}                           "system log"
+check "goon persist"                      {Live mode}                   "persistence status"
+
+send "poweroff\r"
+expect {
+    "Power down"    { puts "\n--- ok: clean poweroff" }
+    "reboot: System halted" { puts "\n--- ok: clean poweroff" }
+    eof             { puts "\n--- ok: clean poweroff" }
+    timeout         { fail "poweroff hung" }
+}
+puts "\nSMOKE TEST PASSED ($mode)"
+exit 0

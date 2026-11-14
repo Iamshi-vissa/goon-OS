@@ -1,0 +1,24 @@
+core/downloads/
+core/work/
+core/out/
+core/vm/
+# live-build output
+desktop/.build/
+desktop/cache/
+desktop/chroot/
+desktop/binary/
+desktop/local/
+desktop/*.iso
+desktop/*.hybrid.iso*
+desktop/*.contents
+desktop/*.files
+desktop/*.packages
+desktop/build.log
+desktop/config/binary
+desktop/config/bootstrap
+desktop/config/chroot
+desktop/config/common
+desktop/config/source
+# ours
+desktop/out/
+desktop/vm/

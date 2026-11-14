@@ -1,0 +1,50 @@
+#!/bin/sh
+# Goon OS Core - boot script. Runs once, as PID 1's first job.
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+ok()   { printf '  \033[1;32m[  OK  ]\033[0m %s\n' "$1"; }
+warn() { printf '  \033[1;33m[ WARN ]\033[0m %s\n' "$1"; }
+
+# Kernel filesystems
+mount -t proc     proc     /proc
+mount -t sysfs    sysfs    /sys
+mount -t devtmpfs devtmpfs /dev 2>/dev/null
+mkdir -p /dev/pts /dev/shm
+mount -t devpts   devpts   /dev/pts
+mount -t tmpfs -o mode=1777,nosuid,nodev tmpfs /dev/shm
+mount -t tmpfs -o mode=0755,nosuid,nodev tmpfs /run
+dmesg -n 1   # keep kernel chatter off the screen; read it with `dmesg`
+printf '\033[2J\033[H'   # clear leftover boot loader text
+
+. /etc/os-release
+printf '\n  \033[1;35mStarting %s\033[0m\n\n' "$PRETTY_NAME"
+ok "Mounted kernel filesystems"
+
+hostname -F /etc/hostname && ok "Hostname: $(hostname)"
+hwclock -s -u 2>/dev/null && ok "Clock set from hardware ($(date '+%H:%M %Z'))"
+
+syslogd -C512 && klogd && ok "System log started (read it with: logread)"
+
+# Optional persistent storage: any partition labelled GOON_DATA
+if /sbin/goon-persist-mount; then
+	ok "Persistent storage mounted - /home and /root survive reboots"
+fi
+chown -R goon:goon /home/goon 2>/dev/null
+
+# Networking: loopback + DHCP on every wired interface
+ip link set lo up
+for path in /sys/class/net/*; do
+	ifc="${path##*/}"
+	[ "$ifc" = lo ] && continue
+	[ "$(cat "$path/type")" = 1 ] || continue   # Ethernet only (skips sit0, tunnels...)
+	[ -d "$path/wireless" ] && continue
+	ip link set "$ifc" up
+	udhcpc -i "$ifc" -b -t 2 -T 1 -S -p "/run/udhcpc.$ifc.pid" \
+		-s /usr/share/udhcpc/default.script >/dev/null 2>&1
+	addr="$(ip -4 -o addr show dev "$ifc" 2>/dev/null | awk '{print $4}')"
+	if [ -n "$addr" ]; then ok "Network $ifc: $addr"; else warn "Network $ifc: no DHCP answer yet (still trying in background)"; fi
+done
+
+printf '\n'
+ok "Boot finished in $(cut -d' ' -f1 /proc/uptime)s"
+printf '\n'

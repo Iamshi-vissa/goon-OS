@@ -1,0 +1,32 @@
+#!/bin/sh
+# goonfetch - system info with the Goon OS logo
+. /etc/os-release
+M='\033[1;35m' C='\033[1;36m' B='\033[1m' R='\033[0m'
+
+up=$(cut -d. -f1 /proc/uptime)
+d=$((up/86400)) h=$((up%86400/3600)) m=$((up%3600/60))
+uptime_s="${m}m"; [ $h -gt 0 ] && uptime_s="${h}h ${uptime_s}"; [ $d -gt 0 ] && uptime_s="${d}d ${uptime_s}"
+
+cpu=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//; s/  */ /g')
+[ -n "$cpu" ] || cpu=$(uname -m)
+cores=$(grep -c '^processor' /proc/cpuinfo)
+mem_total=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+mem_avail=$(awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo)
+mem_used=$((mem_total - mem_avail))
+applets=$(busybox --list | wc -l)
+ip=$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4; exit}')
+if grep -q ' /mnt/goon-data ' /proc/mounts; then storage="persistent ($(awk '$2=="/mnt/goon-data"{print $1}' /proc/mounts))"; else storage="RAM only (live)"; fi
+
+line() { printf "$1%-26s$R  $C%-9s$R %s\n" "$2" "$3" "$4"; }
+printf '\n'
+printf "$M%-26s$R  $B%s$R\n" "  __ _  ___   ___  _ __" "$(id -un)@$(hostname)"
+printf "$M%-26s$R  %s\n"     " / _\` |/ _ \\ / _ \\| '_ \\" "-------------------------"
+line "$M" "| (_| | (_) | (_) | | | |" "OS"      "$PRETTY_NAME $(uname -m)"
+line "$C" " \\__, |\\___/ \\___/|_| |_|" "Kernel" "$(uname -r)"
+line "$C" " |___/        c o r e"     "Uptime"  "$uptime_s"
+line ""   ""                          "Shell"   "ash (BusyBox, $applets commands)"
+line ""   ""                          "CPU"     "$cpu ($cores)"
+line ""   ""                          "Memory"  "${mem_used} MiB / ${mem_total} MiB"
+line ""   ""                          "Storage" "$storage"
+line ""   ""                          "IP"      "${ip:-not connected}"
+printf '\n'

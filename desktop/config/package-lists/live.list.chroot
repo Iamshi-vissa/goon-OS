@@ -1,0 +1,5 @@
+# Live-session plumbing (removed automatically by the installer)
+live-boot
+live-config
+live-config-systemd
+systemd-sysv

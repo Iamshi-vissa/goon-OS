@@ -1,0 +1,25 @@
+#!/bin/sh
+# Mount the GOON_DATA partition (if any) and put /home and /root on it.
+# Exit 0 if persistence is active, 1 if there is no GOON_DATA partition.
+MNT=/mnt/goon-data
+grep -q " $MNT " /proc/mounts && exit 0
+
+have_disk=no
+for b in /sys/block/sd* /sys/block/nvme* /sys/block/vd* /sys/block/hd* /sys/block/mmcblk*; do
+	[ -e "$b" ] && have_disk=yes && break
+done
+[ "$have_disk" = yes ] || exit 1
+dev=""
+for _ in 1 2 3; do   # USB and NVMe disks can take a moment to appear
+	dev="$(findfs LABEL=GOON_DATA 2>/dev/null)" && break
+	sleep 1
+done
+[ -n "$dev" ] || exit 1
+
+mkdir -p "$MNT"
+mount "$dev" "$MNT" || exit 1
+for d in home root; do
+	[ -d "$MNT/$d" ] || cp -a "/$d" "$MNT/$d"
+	mount --bind "$MNT/$d" "/$d"
+done
+exit 0

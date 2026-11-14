@@ -1,0 +1,59 @@
+#!/usr/bin/expect -f
+# Check `goon persist setup`: format a partition, save a file, reboot, file is still there.
+#   ./scripts/persist-test.exp out/goon-os-core-1.0-x86_64.iso
+set iso [lindex $argv 0]
+set img [file normalize [file join [file dirname [info script]] .. vm persist-test.img]]
+set timeout 300
+file mkdir [file dirname $img]
+file delete -force $img
+exec truncate -s 64M $img
+exec sh -c "echo 'type=83' | sfdisk -q $img"
+
+proc fail {msg} { puts "\n\nPERSIST TEST FAILED ($msg)"; exit 1 }
+proc boot_and_login {iso img} {
+    global spawn_id
+    set qemu [list qemu-system-x86_64 -m 512 -nographic -no-reboot -cdrom $iso -boot d \
+              -drive file=$img,format=raw,if=virtio -nic none]
+    if {[file writable /dev/kvm]} { lappend qemu -enable-kvm -cpu host }
+    spawn {*}$qemu
+    expect {
+        "goon login:" {}
+        timeout       { fail "no login prompt" }
+    }
+    send "root\r"; expect "Password:"; send "goon\r"
+    expect {
+        -re {# $} {}
+        timeout   { fail "no shell" }
+    }
+}
+proc run {cmd pattern what} {
+    global spawn_id
+    send "$cmd\r"
+    expect {
+        -re $pattern { puts "\n--- ok: $what" }
+        timeout      { fail $what }
+    }
+    expect -re {# $}
+}
+
+# Boot 1: set up storage and write a file
+boot_and_login $iso $img
+run "goon disks"                         {/dev/vda1}                "partition visible"
+send "goon persist setup /dev/vda1\r"
+expect "Type YES"; send "YES\r"
+expect {
+    "survive reboots" { puts "\n--- ok: persist setup" }
+    timeout           { fail "persist setup" }
+}
+expect -re {# $}
+run "echo goon-was-here > /home/goon/note.txt && echo WROTE" {WROTE} "write file"
+send "poweroff\r"; expect eof
+
+# Boot 2: the file must still be there
+boot_and_login $iso $img
+run "goon persist"                       {Persistent.*/dev/vda1}    "auto-mounted at boot"
+run "cat /home/goon/note.txt"            {goon-was-here}            "file survived reboot"
+run "ls -ln /home/goon/note.txt"         {1000 +1000}               "owned by goon"
+send "poweroff\r"; expect eof
+file delete -force $img
+puts "\nPERSIST TEST PASSED"

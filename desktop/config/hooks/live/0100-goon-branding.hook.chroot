@@ -1,0 +1,86 @@
+#!/bin/sh
+# Goon OS branding. Runs inside the image after all packages are installed.
+set -e
+
+GOON_VERSION="1.0"
+SHARE=/usr/share/goon-os
+WALLPAPER=/usr/share/backgrounds/goon-os/goon-wallpaper.png
+
+echo "I: Goon OS: applying branding"
+
+# --- 1. Identity (os-release) ------------------------------------------------
+# Divert Debian's file so base-files upgrades never overwrite our identity.
+# /etc/os-release is a symlink to this file, so both paths say "Goon OS".
+if ! dpkg-divert --list /usr/lib/os-release | grep -q 'os-release.debian'; then
+	dpkg-divert --local --rename --divert /usr/lib/os-release.debian --add /usr/lib/os-release
+fi
+cat > /usr/lib/os-release <<OSREL
+PRETTY_NAME="Goon OS ${GOON_VERSION}"
+NAME="Goon OS"
+VERSION_ID="${GOON_VERSION}"
+VERSION="${GOON_VERSION} (Trixie base)"
+VERSION_CODENAME=trixie
+DEBIAN_CODENAME=trixie
+ID=goon
+ID_LIKE=debian
+LOGO=goon-os
+HOME_URL="https://github.com/Iamshi-vissa/goon-OS"
+SUPPORT_URL="https://github.com/Iamshi-vissa/goon-OS"
+BUG_REPORT_URL="https://github.com/Iamshi-vissa/goon-OS"
+OSREL
+
+# --- 2. Wallpaper (desktop + login screen) -----------------------------------
+# Xfce on Debian reads its default wallpaper from the desktop-background alternative.
+if [ -f "$WALLPAPER" ]; then
+	update-alternatives --install /usr/share/images/desktop-base/desktop-background \
+		desktop-background "$WALLPAPER" 100
+	update-alternatives --set desktop-background "$WALLPAPER"
+fi
+
+# --- 3. Xfce theme defaults (patch Debian's defaults in place) ----------------
+XFCONF=/etc/xdg/xfce4/xfconf/xfce-perchannel-xml
+set_xfconf() { # file property value
+	if [ -f "$1" ] && grep -q "name=\"$2\" type=\"string\"" "$1"; then
+		sed -i "s|\(<property name=\"$2\" type=\"string\" value=\"\)[^\"]*|\1$3|" "$1"
+	else
+		echo "W: Goon OS: could not set $2 in $1 (skipped)"
+	fi
+}
+set_xfconf "$XFCONF/xsettings.xml" ThemeName         "Arc-Dark"
+set_xfconf "$XFCONF/xsettings.xml" IconThemeName     "Papirus-Dark"
+set_xfconf "$XFCONF/xsettings.xml" FontName          "Inter 10"
+set_xfconf "$XFCONF/xfwm4.xml"     theme             "Arc-Dark"
+set_xfconf "$XFCONF/xfwm4.xml"     title_font        "Inter Bold 10"
+
+# --- 4. Installer (Calamares) branding ----------------------------------------
+if [ -d /etc/calamares/branding/debian ] && [ ! -d /etc/calamares/branding/goon ]; then
+	cp -a /etc/calamares/branding/debian /etc/calamares/branding/goon
+	cp "$SHARE/goon-logo.png" /etc/calamares/branding/goon/goon-logo.png
+	DESC=/etc/calamares/branding/goon/branding.desc
+	set_desc() { # key value  (only touches keys that already exist)
+		sed -i "s|^\([[:space:]]*$1:\).*|\1 \"$2\"|" "$DESC"
+	}
+	sed -i "s|^componentName:.*|componentName:  goon|" "$DESC"
+	set_desc productName         "Goon OS"
+	set_desc shortProductName    "Goon OS"
+	set_desc version             "$GOON_VERSION"
+	set_desc shortVersion        "$GOON_VERSION"
+	set_desc versionedName       "Goon OS $GOON_VERSION"
+	set_desc shortVersionedName  "Goon OS $GOON_VERSION"
+	set_desc bootloaderEntryName "Goon OS"
+	set_desc productLogo         "goon-logo.png"
+	set_desc productIcon         "goon-logo.png"
+	sed -i "s|^branding:.*|branding: goon|" /etc/calamares/settings.conf
+fi
+# Rename the "Install Debian" launcher
+LAUNCHER=/usr/share/applications/install-debian.desktop
+if [ -f "$LAUNCHER" ]; then
+	sed -i -e 's/^Name=.*/Name=Install Goon OS/' -e '/^Name\[/d' "$LAUNCHER"
+fi
+
+# --- 5. Flathub for the Software app ------------------------------------------
+flatpak remote-add --if-not-exists --system flathub \
+	https://dl.flathub.org/repo/flathub.flatpakrepo \
+	|| echo "W: Goon OS: could not add Flathub (no network in chroot?) — users can add it later"
+
+echo "I: Goon OS: branding done"

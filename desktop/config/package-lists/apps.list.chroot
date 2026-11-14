@@ -1,0 +1,25 @@
+# Everyday apps
+firefox-esr
+libreoffice-writer
+libreoffice-calc
+libreoffice-impress
+libreoffice-gtk3
+vlc
+file-roller
+gparted
+
+# App store (Debian packages + Flathub)
+gnome-software
+gnome-software-plugin-flatpak
+flatpak
+
+# Printing
+cups
+system-config-printer
+
+# Tools
+sudo
+curl
+git
+htop
+fastfetch

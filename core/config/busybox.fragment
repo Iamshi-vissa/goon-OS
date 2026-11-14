@@ -1,0 +1,14 @@
+# Goon OS Core — BusyBox options merged on top of `make defconfig`
+# One static binary: no shared libraries needed in the root filesystem
+CONFIG_STATIC=y
+# `tc` does not compile against kernel headers >= 6.8 (removed CBQ qdisc)
+# CONFIG_TC is not set
+# Built-in password/group handling and modern password hashes
+CONFIG_USE_BB_PWD_GRP=y
+CONFIG_USE_BB_SHADOW=y
+CONFIG_USE_BB_CRYPT=y
+CONFIG_USE_BB_CRYPT_SHA=y
+CONFIG_FEATURE_DEFAULT_PASSWD_ALGO="sha512"
+CONFIG_FEATURE_SUID=y
+CONFIG_FEATURE_EDITING_FANCY_PROMPT=y
+CONFIG_FEATURE_EDITING_SAVEHISTORY=y

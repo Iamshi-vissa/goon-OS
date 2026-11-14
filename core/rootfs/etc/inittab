@@ -1,0 +1,12 @@
+# Goon OS Core - BusyBox init table
+::sysinit:/etc/init.d/rcS
+
+# Login prompts: three screens (Alt+F1..F3) and the serial port, if there is one
+tty1::respawn:/sbin/getty 38400 tty1
+tty2::respawn:/sbin/getty 38400 tty2
+tty3::respawn:/sbin/getty 38400 tty3
+ttyS0::respawn:/sbin/goon-serial-getty
+
+::ctrlaltdel:/sbin/reboot
+::shutdown:/etc/init.d/rc.shutdown
+::restart:/sbin/init

@@ -1,0 +1,19 @@
+# Base desktop: Debian's maintained Xfce task (Xorg, LightDM, polkit agent, etc.)
+task-xfce-desktop
+task-laptop
+xfce4-goodies
+lightdm-gtk-greeter-settings
+
+# Networking, sound, Bluetooth
+network-manager-gnome
+pipewire-audio
+wireplumber
+pavucontrol
+blueman
+
+# Look and feel
+arc-theme
+papirus-icon-theme
+fonts-inter
+fonts-noto-core
+fonts-noto-color-emoji

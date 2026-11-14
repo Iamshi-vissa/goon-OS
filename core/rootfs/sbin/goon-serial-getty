@@ -1,0 +1,6 @@
+#!/bin/sh
+# Offer a login on the first serial port only if the machine really has one.
+if stty -F /dev/ttyS0 >/dev/null 2>&1 && [ "$(cat /sys/class/tty/ttyS0/type 2>/dev/null)" != 0 ]; then
+	exec /sbin/getty -L 115200 ttyS0 vt100
+fi
+while :; do sleep 86400; done

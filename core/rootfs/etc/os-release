@@ -1,0 +1,8 @@
+NAME="Goon OS"
+PRETTY_NAME="Goon OS Core @VERSION@"
+ID=goon
+VERSION_ID="@VERSION@"
+VERSION="@VERSION@ (Core)"
+VARIANT="Core"
+VARIANT_ID=core
+HOME_URL="https://github.com/Iamshi-vissa/goon-OS"

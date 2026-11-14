@@ -1,0 +1,22 @@
+#!/bin/sh
+# shellcheck disable=SC2154  # variables are set by udhcpc
+# udhcpc hook: apply the address, routes and DNS servers handed out by DHCP
+RESOLV=/etc/resolv.conf
+case "$1" in
+	deconfig)
+		ip -4 addr flush dev "$interface"
+		ip link set "$interface" up
+		;;
+	bound|renew)
+		ip -4 addr flush dev "$interface"
+		ip -4 addr add "$ip/${mask:-24}" ${broadcast:+broadcast "$broadcast"} dev "$interface"
+		if [ -n "$router" ]; then
+			while ip -4 route del default dev "$interface" 2>/dev/null; do :; done
+			for r in $router; do ip -4 route add default via "$r" dev "$interface"; break; done
+		fi
+		: > "$RESOLV"
+		[ -n "$domain" ] && echo "search $domain" >> "$RESOLV"
+		for s in $dns; do echo "nameserver $s" >> "$RESOLV"; done
+		;;
+esac
+exit 0
